@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 //import './App.css';
 export default function App() {
   const [content, setContent] = useState(""); //To store the posted content
@@ -8,6 +8,9 @@ export default function App() {
   const [nameSuggestions, setNameSuggestions] = useState([]); //To store the name list
   const [showSuggestions, setShowSuggestions] = useState(false); //To hide and display the suggestion list
   const [currentTime, setCurrentTime] = useState(new Date()); //To store the post posted time
+  const [cursorPos, setCursorPos] = useState({ top: -999, left: -999 });
+
+  const inputRef = useRef(null);
 
   const initializedNames = [
     "Ajay",
@@ -67,12 +70,47 @@ export default function App() {
     const searchTerm = inputValue
       .slice(inputValue.lastIndexOf("@") + 1)
       .toLowerCase(); // To check the terms after the @
-    if (inputValue.includes("@") && searchTerm !== "@") {
+    if (inputValue.includes("@") && searchTerm != "@") {
       //condition to avoid the consecutive @@
-      setShowSuggestions(true); //if true the dropdown will displayed
+      setShowSuggestions(true);
+      updateCursorPos(event);
+      //if true the dropdown will displayed
     } else {
       setShowSuggestions(false); //if false the dropdown willnot be displayed
     }
+  };
+  const updateCursorPos = (event) => {
+    const input = inputRef.current;
+    const selectionStart = input.selectionStart;
+
+    const div = document.createElement("div");
+    const span = document.createElement("span");
+    const copyStyle = getComputedStyle(input);
+
+    Array.prototype.forEach.call(copyStyle, (prop) => {
+      div.style[prop] = copyStyle[prop];
+    });
+
+    div.style.position = "absolute";
+    div.style.visibility = "hidden";
+    div.style.whiteSpace = "pre-wrap";
+    div.style.wordWrap = "break-word";
+
+    document.body.appendChild(div);
+    div.textContent = input.value.substr(0, selectionStart);
+    span.textContent = input.value.substr(selectionStart) || ".";
+    div.appendChild(span);
+
+    const { offsetLeft: inputX, offsetTop: inputY } = input;
+    const { offsetWidth: divWidth, offsetHeight: divHeight } = div;
+    const { offsetLeft: spanX, offsetTop: spanY } = span;
+
+    setCursorPos({
+      top: inputY + spanY + divHeight - input.scrollTop - 99,
+      left: inputX + spanX - input.scrollLeft - 10,
+    });
+
+    document.body.removeChild(div);
   };
 
   //The selected name is concatenated with the previous content
@@ -115,11 +153,18 @@ export default function App() {
       .catch((err) => {
         console.log(err); // If error occurs we can see it through the console
       });
-  }, []);
+    const query = content.slice(content.lastIndexOf("@") + 1).toLowerCase();
+    const matchFound = nameSuggestions.some((name) =>
+      name.toLowerCase().includes(query)
+    );
+    setShowSuggestions((query.length > 0 && matchFound)|| content.slice(-1) == '@');
+    if (content.length === 0 || !content.includes('@') ) {
+      setCursorPos({ top: -999, left: -999 });
+  }  }, [content, nameSuggestions]);
   return (
     <div className="min-h-screen  flex items-center justify-center bg-gray-900 ">
-      <div className="flex flex-col items-center justify-center space-y-4  w-2/3 mb-3.5 text-black">
-        <div className="w-full p-6 bg-gray-800 rounded-lg shadow-lg">
+      <div className="flex flex-col items-center  justify-center space-y-4  w-2/3 mb-3.5 text-black">
+        <div className="w-full p-6 bg-gray-800  rounded-lg shadow-lg">
           {/* //  Input tag to get the user name ,the user name is same until it is changed intentionally */}
 
           <input
@@ -129,16 +174,20 @@ export default function App() {
             onChange={(event) => setUserName(event.target.value)}
           />
           {/*Input tag to get the content details ,it is changed when we posted the content */}
-          <input
-            className="w-full px-5 py-10  bg-gray-200 rounded"
+          <textarea
+            ref={inputRef}
+            className="w-full break-words px-2 py-3 bg-gray-200 rounded"
             type="text"
             placeholder="Create a post..."
             value={content}
             onChange={handleContentChange}
+            rows={4}
           />
-          {/* When @ is typed the nameList will be displayed */}
           {showSuggestions && (
-            <ul className="p-2 max-h-32 overflow-y-auto bg-gray-200 rounded text-black bg-white">
+            <ul
+              className="p-2 max-h-32 absolute overflow-y-auto bg-gray-200 rounded text-black bg-white shadow-lg"
+              style={{ top: cursorPos.top, left: cursorPos.left }}
+            >
               {nameSuggestions
                 .filter((name) =>
                   name
@@ -153,20 +202,16 @@ export default function App() {
                     className="px-3 py-2 rounded cursor-pointer hover:bg-gray-300 flex items-center"
                     onClick={() => handleNameSelection(name)}
                   >
-                    {/* Conditional display based on index */}
-                    {index % 2 === 0 ? ( // Even index
+                    {index % 2 === 0 ? (
                       <div className="bg-pink-400 w-8 h-5 px-2 py-4 rounded-full shadow-lg flex items-center justify-center text-base">
                         {name.charAt(0).toUpperCase()}
                       </div>
                     ) : (
-                      // Odd index
                       <div className="bg-green-500 w-8 h-5 px-2 py-4 rounded-full shadow-lg flex items-center justify-center text-base">
                         {name.charAt(0).toUpperCase()}
                       </div>
                     )}
-
-                    {/* Display the name */}
-                    <span className="ml-2  ">{name}</span>
+                    <span className="ml-2">{name}</span>
                   </li>
                 ))}
             </ul>
@@ -205,7 +250,9 @@ export default function App() {
                 <div className="ml-3 flex flex-col">
                   {" "}
                   <span class="text-lb text-black">{item.username}</span>
-                  <span class="text-neutral-500">{formatTimeAgo(item.time)}</span>
+                  <span class="text-neutral-500">
+                    {formatTimeAgo(item.time)}
+                  </span>
                 </div>
               </div>
             </div>
